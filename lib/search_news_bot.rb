@@ -2,21 +2,35 @@ require 'sinatra'
 require 'line/bot'
 require 'net/http'
 require 'uri'
-
-# uri = URI.parse("https://api.apigw.smt.docomo.ne.jp/webCuration/v3/search?APIKEY=#{ENV['DOCOMO_API_KEY']}&keyword=%e3%83%a9%e3%83%bc%e3%83%a1%e3%83%b3&s=1&n=10&lang=ja")
-# response = Net::HTTP.get_response(uri)
-
-# puts response.body
-
-get '/' do
-  "hello world"
-end
+require 'json'
 
 def client
   @client ||= Line::Bot::Client.new { |config|
-    config.channel_secret = ENV["LINE_CHANNEL_SECRET"]
-    config.channel_token = ENV["LINE_CHANNEL_TOKEN"]
+    config.channel_secret = ENV['LINE_CHANNEL_SECRET']
+    config.channel_token = ENV['LINE_CHANNEL_TOKEN']
   }
+end
+
+def news_search(text)
+  params = URI.encode_www_form({APIKEY: ENV['DOCOMO_API_KEY'], keyword: text, s: 1, n: 3, lang: 'ja'})
+  uri = URI.parse("https://api.apigw.smt.docomo.ne.jp/webCuration/v3/search?#{params}")
+  response = Net::HTTP.get(uri)
+  response_json = JSON.parse(response)
+  count = response_json['itemsPerPage'].to_i
+  @message = []
+  unless count == 0
+    response_json['articleContents'].each do |content|
+      @message << {
+        type: 'text',
+        text: content['contentData']['title'] + "\n" + content['contentData']['linkUrl']
+      }
+    end
+  else
+    @message = {
+      type: 'text',
+      text: 'Sorry, not found.'
+    }
+  end
 end
 
 post '/callback' do
@@ -33,11 +47,9 @@ post '/callback' do
     when Line::Bot::Event::Message
       case event.type
       when Line::Bot::Event::MessageType::Text
-        message = {
-          type: 'text',
-          text: event.message['text']
-        }
-        client.reply_message(event['replyToken'], message)
+        text = event.message['text']
+        news_search(text)
+        client.reply_message(event['replyToken'], @message)
       when Line::Bot::Event::MessageType::Image, Line::Bot::Event::MessageType::Video
         response = client.get_message_content(event.message['id'])
         tf = Tempfile.open("content")
@@ -48,4 +60,5 @@ post '/callback' do
 
   "OK"
 end
+
 
