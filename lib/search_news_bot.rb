@@ -1,4 +1,5 @@
 require 'sinatra'
+require 'line/bot'
 require 'net/http'
 require 'uri'
 
