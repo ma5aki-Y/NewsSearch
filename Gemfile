@@ -5,3 +5,8 @@ git_source(:github) {|repo_name| "https://github.com/#{repo_name}" }
 
 gem 'sinatra'
 gem 'line-bot-api'
+gem 'mechanize'
+gem 'nokogiri'
+gem 'poltergeist'
+gem 'capybara'
+gem 'pry-byebug'

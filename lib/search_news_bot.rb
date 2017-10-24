@@ -1,4 +1,6 @@
-require 'sinatra'
+require 'bundler'
+Bundler.require
+
 require 'line/bot'
 require 'net/http'
 require 'uri'
@@ -17,7 +19,6 @@ def news_search(text)
   response = Net::HTTP.get(uri)
   response_json = JSON.parse(response)
   count = response_json['itemsPerPage'].to_i
-  @message = []
   unless count == 0
     response_json['articleContents'].each do |content|
       @message << {
@@ -31,6 +32,10 @@ def news_search(text)
       text: 'Sorry, not found.'
     }
   end
+end
+
+def class_cancel_search
+
 end
 
 post '/callback' do
@@ -47,8 +52,14 @@ post '/callback' do
     when Line::Bot::Event::Message
       case event.type
       when Line::Bot::Event::MessageType::Text
+        @message = []
         text = event.message['text']
-        news_search(text)
+        case text
+        when '休講'
+          class_cancel_search
+        else
+          news_search(text)
+        end
         client.reply_message(event['replyToken'], @message)
       when Line::Bot::Event::MessageType::Image, Line::Bot::Event::MessageType::Video
         response = client.get_message_content(event.message['id'])
