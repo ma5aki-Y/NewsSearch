@@ -18,8 +18,9 @@ def news_search(text)
   uri = URI.parse("https://api.apigw.smt.docomo.ne.jp/webCuration/v3/search?#{params}")
   response = Net::HTTP.get(uri)
   response_json = JSON.parse(response)
-  count = response_json['itemsPerPage'].to_i
+  count = response_json['itemsPerPage'].to_i 
   unless count == 0
+    @message = []
     response_json['articleContents'].each do |content|
       @message << {
         type: 'text',
@@ -35,7 +36,34 @@ def news_search(text)
 end
 
 def class_cancel_search
-
+  today = Date.today.strftime('%Y-%m-%d')
+  #スクレイピング処理
+  agent = Mechanize.new
+  agent.user_agent_alias = 'Mac Safari 4'
+  page = agent.get('https://www.ac04.tamacc.chuo-u.ac.jp/ActiveCampus/module/KyukoDaigakuAll.php').content.toutf8
+  contents = Nokogiri::HTML.parse(page, nil, 'utf-8')
+  @str = ''
+  # 休講情報テーブルの行番号を設定
+  table_row = 2
+  date = contents.css('div#portlet_acPortlet_0 tr:nth-of-type(2) td:nth-of-type(2)').text
+  while date == today
+    if contents.css("div#portlet_acPortlet_0 tr:nth-of-type(#{table_row}) td:nth-of-type(4)").text == '商'
+      here_document(contents,table_row)
+    end
+    table_row += 1
+    date = contents.css("div#portlet_acPortlet_0 tr:nth-of-type(#{table_row}) td:nth-of-type(2)").text
+  end
+  unless table_row == 2
+    @message = {
+      type: 'text',
+      text: "本日の休講情報はこちらです。 \n" + @str
+    }
+  else
+    @message = {
+      type: 'text',
+      text: "現在、#{today}の休講情報は掲載されておりません。\n https://www.ac04.tamacc.chuo-u.ac.jp/ActiveCampus/module/KyukoDaigakuAll.php"
+    }
+  end
 end
 
 post '/callback' do
@@ -45,14 +73,12 @@ post '/callback' do
   unless client.validate_signature(body, signature)
     error 400 do 'Bad Request' end
   end
-
   events = client.parse_events_from(body)
   events.each { |event|
     case event
     when Line::Bot::Event::Message
       case event.type
       when Line::Bot::Event::MessageType::Text
-        @message = []
         text = event.message['text']
         case text
         when '休講'
@@ -72,4 +98,15 @@ post '/callback' do
   "OK"
 end
 
-
+def here_document(contents,table_row)
+  class_room = contents.css("div#portlet_acPortlet_0 tr:nth-of-type(#{table_row}) td:nth-of-type(3)").text
+  teacher = contents.css("div#portlet_acPortlet_0 tr:nth-of-type(#{table_row}) td:nth-of-type(5)").text
+  room = contents.css("div#portlet_acPortlet_0 tr:nth-of-type(#{table_row}) td:nth-of-type(6)").text
+  text = <<-"EOS"
+--------------
+  #{class_room}
+  #{teacher}
+  #{room}
+  EOS
+  @str << text
+end
